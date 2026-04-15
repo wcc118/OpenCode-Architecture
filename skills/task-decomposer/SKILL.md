@@ -1,134 +1,45 @@
 ---
 name: task-decomposer
-description: Breaks any incoming goal into atomic, verifiable subtasks before any agent begins work. Invoke at the start of every new task or feature request, before routing to any agent. Orchestrator-scoped. Prevents agents from attempting tasks too large for a single session and ensures every subtask has clear acceptance criteria.
+description: Breaks a goal into atomic, verifiable subtasks before any agent begins work. Invoke for any task with more than one moving part. Each subtask gets explicit success criteria with verification types and an in-scope file list.
 ---
 
 # Task Decomposer
 
-No agent starts work until the task is decomposed. Decomposition is the orchestrator's first move on every new goal.
+## Before Decomposing
+Answer these or ask the human:
+1. What does done look like? (end state, not process)
+2. What must not change?
+3. What files are in play?
 
----
+## A Good Subtask
+- Has binary success criteria — passes or it doesn't
+- Has an explicit verification type on every criterion
+- Has an explicit in-scope file list — nothing outside it gets touched
+- Completable in one session by one agent
 
-## Why Decompose First
+## Output Format — Required for Every Subtask
+```
+Subtask N: {{name}}
+Agent: {{agent}}
+Branch: feature/{{slug}} or fix/{{slug}}
+Depends on: subtask N-1 / none
+In-scope files: [explicit list — everything not listed is out of scope]
 
-Large tasks cause agents to:
-- Lose context mid-execution and make inconsistent decisions
-- Produce work that can't be tested in isolation
-- Create commits that are too large to safely review or roll back
-- Drift from the original goal as complexity compounds
+Success criteria:
+  - {{criterion}} [unit]
+  - {{criterion}} [runtime]
+  - {{criterion}} [human]
 
-A well-decomposed task gives every agent a clear, bounded, verifiable unit of work.
-
----
-
-## Decomposition Protocol
-
-### Step 1 — Understand the Goal
-
-Before decomposing, answer these questions:
-
-1. What does "done" look like? (end state, not process)
-2. What must NOT change? (constraints, protected code, locked dependencies)
-3. Are there external dependencies? (API, DB schema, other teams' code)
-4. What is the failure mode if this goes wrong?
-
-If any answer is unclear, ask the human before decomposing.
-
-### Step 2 — Identify Natural Boundaries
-
-Good subtask boundaries are:
-- **Testable in isolation** — you can write a test that passes/fails for just this piece
-- **Single responsibility** — one agent, one concern, one branch
-- **Reversible** — if it fails, rolling it back doesn't break other subtasks
-- **Small enough for one session** — rule of thumb: completable in under 60 minutes
-
-Bad boundaries (split these further):
-- "Build the auth system" — too large
-- "Fix the bug" — too vague
-- "Update everything to use the new API" — too broad
-
-### Step 3 — Write the Subtask List
-
-For each subtask, define:
-
-```markdown
-## Subtask {{N}}: {{Short Name}}
-
-**Goal:** {{One sentence — what this subtask produces}}
-**Agent:** {{which agent does this work}}
-**Branch:** feature/{{slug}} or fix/{{slug}}
-**Depends on:** Subtask {{N-1}} complete / none
-**Estimated sessions:** {{1-3}}
-
-### Acceptance Criteria
-- [ ] {{Specific, verifiable criterion}}
-- [ ] {{Specific, verifiable criterion}}
-- [ ] Tests written and passing for this subtask
-- [ ] Session log written
-
-### Out of Scope
-- {{What this subtask explicitly does NOT do}}
+Out of scope: {{what this explicitly does not do}}
 ```
 
-### Step 4 — Sequence the Subtasks
+## Verification Types
+- `[unit]` — pytest or equivalent must execute and pass
+- `[runtime]` — code must actually run, not just pass unit tests
+- `[human]` — explicit human confirmation required before marking done
 
-Identify dependencies and order them:
+## Sizing Rule
+If you can't write a single success criterion: split it. If it touches more than 3 files: consider splitting. If it can't be done in one session: split it.
 
-```
-[Subtask 1] → [Subtask 2] → [Subtask 4]
-                           ↗
-              [Subtask 3] →
-```
-
-Subtasks with no dependencies can run in parallel (different branches). Subtasks that depend on each other must run in sequence.
-
-### Step 5 — Write to Agent.md
-
-Add all subtasks to the `agent.md` Task Queue in order:
-
-```markdown
-### Pending
-1. {{Subtask 1 name}} — `@build` — branch: `feature/{{slug}}`
-2. {{Subtask 2 name}} — `@refactor` — branch: `feature/{{slug}}`  
-3. {{Subtask 3 name}} — `@test` — branch: `feature/{{slug}}`
-```
-
-Set the first subtask to "In Progress" and update the Next Required Action.
-
----
-
-## Decomposition Examples
-
-### Example: "Add user authentication"
-
-❌ Bad: One task "implement auth"
-
-✅ Good decomposition:
-1. `feat/auth-models` — Define User model and DB schema (@build)
-2. `feat/auth-jwt` — Implement JWT generate/verify functions (@build)
-3. `feat/auth-routes` — Wire /login and /refresh endpoints (@build)
-4. `test/auth-unit` — Unit tests for JWT functions (@test)
-5. `test/auth-integration` — Integration tests for routes (@test)
-6. `docs/auth` — Update architecture.md and API docs (@docs)
-
-### Example: "Fix the broken search"
-
-❌ Bad: One task "fix search"
-
-✅ Good decomposition:
-1. `explore/search-diagnosis` — Map current search flow, identify failure point (@explore → report to orchestrator)
-2. `fix/search-query` — Fix identified root cause (@build)
-3. `test/search-regression` — Add regression test for this specific failure (@test)
-
----
-
-## Subtask Sizing Guide
-
-| Subtask feels like... | Action |
-|---|---|
-| More than one agent needs to be involved | Split it |
-| You can't write a single acceptance criterion | Split it |
-| It touches more than 3 files | Consider splitting |
-| It could be done in one focused session | Good size |
-| It's a single function or endpoint | Perfect size |
-| It's just a config change or doc update | Fine as-is |
+## Write to agent.md
+Add subtasks to task queue (names only in queue — full detail lives in the subtask definition). Set first subtask In Progress. Update Next Required Action. Set in-scope files in Current Task block.
